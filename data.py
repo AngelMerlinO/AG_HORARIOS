@@ -80,8 +80,8 @@ mapa_curricular = [
     {
         'nombre': 'Matemáticas Discretas',
         'cuatrimestre': 1,
-        'seriacion': [None,None,None,None,None,None,None,1],
-        'holgura': 8
+        'seriacion': [None,None,None,None,None,None,1,None],
+        'holgura': 7
     },
     {
         'nombre': 'Expresión Oral y Escrita I',

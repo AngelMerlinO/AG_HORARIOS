@@ -1,6 +1,6 @@
 import random
 import numpy as np
-from PF_data import mapa_curricular
+from data import mapa_curricular
 
 materias = []
 cuatrimestre_alumno = 8 #Valor de prueba
@@ -18,6 +18,17 @@ class Materia:
         self.miercoles = miercoles
         self.jueves = jueves
         self.viernes = viernes
+    
+    def __eq__(self, other):
+        if isinstance(other, Materia):
+            return (self.nombre == other.nombre and self.cuatrimestre == other.cuatrimestre and
+                    self.grupo == other.grupo and self.lunes == other.lunes and
+                    self.martes == other.martes and self.miercoles == other.miercoles and
+                    self.jueves == other.jueves and self.viernes == other.viernes)
+        return False
+
+    def __hash__(self):
+        return hash((self.nombre, self.cuatrimestre, self.grupo, tuple(self.lunes), tuple(self.martes), tuple(self.miercoles), tuple(self.jueves), tuple(self.viernes)))
 
     def asignar_calif_cuatrimestre(self, calif):
         self.calif_cuatrimestre = calif
@@ -158,15 +169,15 @@ class AlgoritmoGenetico:
         return self.mutar(hijos)
     
     def mutar(self, hijos):
-        print('sin mutar', hijos)
+        #print('sin mutar', hijos)
         for hijo in hijos:
             proba_mute = random.random()
-            print(proba_mute)
+            #print(proba_mute)
             if proba_mute <= self.prob_mutacion: #Agregar un if
                 hijo.pop()
-                print('se quito materia')
+                #print('se quito materia')
             else:
-                print('se intenta agregar materia')
+                #print('se intenta agregar materia')
                 materia = None
                 indices = []
                 bandera = True
@@ -181,10 +192,70 @@ class AlgoritmoGenetico:
                     materia = self.materias[indice_random]
                 if bandera:
                     hijo.add(materia)
-                    print('se agrego materia')
-        print('mutado',hijos)
+                    #print('se agrego materia')
+        #print('mutado',hijos)
         return(hijos)
-                
+    
+    def evaluar_poblacion(self):
+        aptitudes = []
+        ys_calculadas = []
+        for individuo in self.poblacion:
+            cont_calif_cuatri = 0
+            cont_calif_seriacion = 0
+            cont_calif_holgura = 0
+            for materia in individuo:
+                cont_calif_cuatri += materia.calif_cuatrimestre
+                cont_calif_seriacion += materia.calif_seriacion
+                cont_calif_holgura += materia.calif_holgura
+            yc = [
+                len(individuo), 
+                cont_calif_cuatri, 
+                cont_calif_seriacion, 
+                cont_calif_holgura
+            ]
+            ys_calculadas.append(np.array(yc))
+        yd = np.array([self.maximo_de_materias, self.calif_cuatrimestre_meta * 8, self.calif_seriacion_meta * 8, self.calif_holgura_meta * 8])
+
+        for i in range(len(self.poblacion)):
+            error = yd - ys_calculadas[i]
+            norma = np.linalg.norm(error)
+            aptitudes.append((norma, i))
+
+        aptitudes.sort(key=lambda x: x[0])
+        return aptitudes
+
+    def podar(self):
+        #Elimino duplicados
+        poblacion_sin_duplicados = set()
+        for individuo in self.poblacion:
+            individuo_canonico = tuple(sorted(individuo, key=lambda x: (x.nombre, x.cuatrimestre, x.grupo)))
+            poblacion_sin_duplicados.add(individuo_canonico)
+        # Convertir de vuelta a conjuntos de materias
+        self.poblacion = [set(individuo) for individuo in poblacion_sin_duplicados]
+        #Evalúo aptitud
+        aptitudes = self.evaluar_poblacion()
+        poblacion_podada = []
+        if len(self.poblacion) > self.pob_maxima:
+            for i in range(self.pob_maxima):
+                poblacion_podada.append(self.poblacion[aptitudes[i][1]])
+            self.poblacion = poblacion_podada
+    
+    def main(self):
+        ag.obtener_media_calif_cuatri()
+        ag.obtener_max_calif_seriacion()
+        ag.obtener_min_calif_holgura()
+        ag.crear_pob_inicial()
+        for i in range(self.generaciones -1):
+            ag.emparejar()
+            ag.podar()
+        cont=0
+        for individuo in ag.poblacion:
+            cont += 1
+            for elemento in individuo:
+                print(cont, elemento.__dict__)
+        print(ag.__dict__)
+            
+
 
 def obtener_calif_cuatrimestre(materias):
     cuatris = set()
@@ -229,22 +300,17 @@ materia4 = Materia('Compiladores e Intérpretes',8,'B',[10,11], [10,11], [10,11]
 materia5 = Materia('Pruebas del Software',7,'B',[], [14], [], [8], [])
 materia6 = Materia('Pruebas del Software',7,'A',[], [14], [13], [], [])
 materia7 = Materia('Matemáticas Discretas',1,'A',[13], [], [13], [], [])
+materia8 = Materia('Mantenimiento de Software',8,'A',[], [], [], [], [15])
+materia9 = Materia('Mantenimiento de Software',8,'B',[], [], [], [], [14])
+materia10 = Materia('Estancia II',7,'A',[], [], [], [], [14])
 
-materias = [materia1, materia2, materia3, materia4, materia5, materia6, materia7]
+materias = [materia1, materia2, materia3, materia4, materia5, materia6, materia7, materia8, materia9, materia10]
 
 obtener_calif_cuatrimestre(materias)
 obtener_calif_seriacion(materias)
 obtener_calif_holgura(materias)
 
-ag = AlgoritmoGenetico(0.8, 0.5, 3, 2, 100, materias)
-ag.obtener_media_calif_cuatri()
-ag.obtener_max_calif_seriacion()
-ag.obtener_min_calif_holgura()
-ag.crear_pob_inicial()
-ag.emparejar()
-cont=0
-for individuo in ag.poblacion:
-    cont += 1
-    for elemento in individuo:
-        print(cont, elemento.__dict__)
-print(ag.__dict__)
+ag = AlgoritmoGenetico(0.8, 0.5, 50, 100, 500, materias)
+ag.main()
+
+
