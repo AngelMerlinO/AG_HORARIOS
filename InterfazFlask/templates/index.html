@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generador de Horarios</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
+    <style>
+        body {
+            transition: background-color 0.5s, color 0.5s;
+        }
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #121212;
+                color: #ffffff;
+            }
+            .form-control, .btn-primary, .select2-container--default .select2-selection--multiple {
+                background-color: #333333;
+                color: #ffffff;
+                border-color: #555555;
+            }
+            .btn-primary {
+                border-color: #ffffff;
+            }
+            .select2-container--default .select2-selection--multiple .select2-selection__choice {
+                background-color: #555555;
+            }
+        }
+        .schedule-table td {
+            width: 50px;
+            height: 50px;
+            text-align: center;
+            vertical-align: middle;
+            cursor: pointer;
+        }
+        .schedule-table .hour-column {
+            cursor: default; /* Desactivar el puntero de clic para la columna de las horas */
+        }
+        .occupied {
+            background-color: #ff0000;
+            color: #ffffff;
+        }
+        .selected {
+            background-color: #00ff00;
+            color: #ffffff;
+        }
+        /* Clase para ocultar elementos */
+        .d-none {
+            display: none;
+        }
+        /* Estilos adicionales para el modal */
+        .modal-body .schedule-table td {
+            height: 50px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .modal-hour-cell {
+            cursor: default; /* Desactivar el puntero de clic */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mt-5">Generador de Horarios</h1>
+        <p>Cuatrimestre del Alumno: {{ cuatrimestre_alumno }}</p>
+        <form id="materias-form" method="POST" class="mt-3">
+            <div class="form-group">
+                <label for="materia">Materia:</label>
+                <select class="form-control" id="materia" name="materia" required>
+                    <option value="" disabled selected>Selecciona una materia</option>
+                    {% for materia in mapa_curricular %}
+                        <option value="{{ materia['nombre'] }}">{{ materia['nombre'] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="grupo">Grupo:</label>
+                <input type="text" class="form-control" id="grupo" name="grupo" maxlength="1" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="horario">Selecciona el horario:</label>
+                <table class="table table-bordered schedule-table">
+                    <thead>
+                        <tr>
+                            <th class="hour-column">Hora</th>
+                            <th>Lunes</th>
+                            <th>Martes</th>
+                            <th>Miércoles</th>
+                            <th>Jueves</th>
+                            <th>Viernes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for hour in range(8, 16) %}
+                            <tr>
+                                <td class="hour-column">{{ hour }}:00</td>
+                                <td id="lunes-{{ hour }}" data-day="lunes" data-hour="{{ hour }}"></td>
+                                <td id="martes-{{ hour }}" data-day="martes" data-hour="{{ hour }}"></td>
+                                <td id="miercoles-{{ hour }}" data-day="miercoles" data-hour="{{ hour }}"></td>
+                                <td id="jueves-{{ hour }}" data-day="jueves" data-hour="{{ hour }}"></td>
+                                <td id="viernes-{{ hour }}" data-day="viernes" data-hour="{{ hour }}"></td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <input type="hidden" id="selected-hours" name="selected-hours">
+            <button type="submit" class="btn btn-primary">Agregar Materia</button>
+        </form>
+
+        <h3 class="mt-5">Materias Seleccionadas:</h3>
+        <ul class="list-group" id="selected-materias-list">
+            {% for materia in selected_materias %}
+                <li class="list-group-item">
+                    Nombre: {{ materia.nombre }}<br>
+                    Cuatrimestre: {{ materia.cuatrimestre }}<br>
+                    Grupo: {{ materia.grupo }}<br>
+                    Lunes: <span class="formatted-hours">{{ materia.horarios['lunes'] }}</span><br>
+                    Martes: <span class="formatted-hours">{{ materia.horarios['martes'] }}</span><br>
+                    Miércoles: <span class="formatted-hours">{{ materia.horarios['miercoles'] }}</span><br>
+                    Jueves: <span class="formatted-hours">{{ materia.horarios['jueves'] }}</span><br>
+                    Viernes: <span class="formatted-hours">{{ materia.horarios['viernes'] }}</span>
+                </li>
+            {% endfor %}
+        </ul>
+
+        <!-- Ocultar esta sección usando la clase d-none -->
+        <h3 class="mt-5 d-none">JSON de Materias Seleccionadas:</h3>
+        <pre id="json-output" class="d-none">{{ materias_json }}</pre>
+
+        <!-- Cambiar el texto del botón a Generar Algoritmo -->
+        <button id="send-json" class="btn btn-success mt-3">Generar Horario</button>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="horarioModal" tabindex="-1" role="dialog" aria-labelledby="horarioModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="horarioModalLabel">Horario Generado</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <table class="table table-bordered schedule-table">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Lunes</th>
+                                <th>Martes</th>
+                                <th>Miércoles</th>
+                                <th>Jueves</th>
+                                <th>Viernes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for hour in range(7, 17) %}
+                                <tr>
+                                    <td>{{ hour }}:00 - {{ hour + 1 }}:00</td>
+                                    <td class="modal-hour-cell" id="modal-lunes-{{ hour }}"></td>
+                                    <td class="modal-hour-cell" id="modal-martes-{{ hour }}"></td>
+                                    <td class="modal-hour-cell" id="modal-miercoles-{{ hour }}"></td>
+                                    <td class="modal-hour-cell" id="modal-jueves-{{ hour }}"></td>
+                                    <td class="modal-hour-cell" id="modal-viernes-{{ hour }}"></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#materia').select2({
+                placeholder: 'Selecciona una materia',
+                allowClear: true
+            });
+
+            $('.schedule-table td').not('.hour-column').click(function() {
+                $(this).toggleClass('selected');
+            });
+
+            $('form').submit(function() {
+                var selectedHours = {
+                    lunes: [],
+                    martes: [],
+                    miercoles: [],
+                    jueves: [],
+                    viernes: []
+                };
+
+                $('.selected').each(function() {
+                    var day = $(this).data('day');
+                    var hour = $(this).data('hour');
+                    selectedHours[day].push(hour);
+                });
+
+                for (var day in selectedHours) {
+                    $('form').append('<input type="hidden" name="' + day + '" value="' + selectedHours[day].join(',') + '">');
+                }
+
+                $('#selected-hours').val(JSON.stringify(selectedHours));
+            });
+
+            $('#materia, #grupo').change(function() {
+                highlightSchedule($('#materia').val(), $('#grupo').val());
+            });
+
+            $('#send-json').click(function() {
+                var jsonOutput = $('#json-output').text();
+                var jsonData = JSON.parse(jsonOutput);
+
+                fetch('http://127.0.0.1:5001/genetico', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(jsonData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Success:', data);
+                    mostrarHorario(data);
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                });
+            });
+
+            function mostrarHorario(data) {
+                $('.modal-hour-cell').empty().removeClass('selected');
+                
+                data.forEach(materia => {
+                    const nombre = `${materia.nombre} - ${materia.grupo}`;
+                    ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'].forEach(dia => {
+                        materia[dia].forEach(hora => {
+                            $(`#modal-${dia}-${hora}`).text(nombre).addClass('selected');
+                        });
+                    });
+                });
+
+                $('#horarioModal').modal('show');
+            }
+
+            function highlightSchedule(materia, grupo) {
+                $('.schedule-table td').removeClass('occupied');
+
+                var horarios = {{ materias_json | tojson }};
+                horarios.materias.forEach(function(item) {
+                    if (item.nombre === materia && item.grupo === grupo) {
+                        for (var dia in item.horarios) {
+                            item.horarios[dia].forEach(function(hora) {
+                                $('#' + dia + '-' + hora).addClass('occupied');
+                            });
+                        }
+                    }
+                });
+            }
+
+            function convertirHoras(horas) {
+                return horas.map(hora => {
+                    let periodo = 'AM';
+                    let hora12 = hora;
+                    if (hora >= 12) {
+                        periodo = 'PM';
+                        if (hora > 12) hora12 = hora - 12;
+                    }
+                    if (hora == 0) {
+                        hora12 = 12;
+                    }
+                    return `${hora12}:00 ${periodo} - ${hora12 + 1}:00 ${periodo}`;
+                }).join(', ');
+            }
+
+            $('#selected-materias-list .list-group-item').each(function() {
+                $(this).find('.formatted-hours').each(function() {
+                    const horas = JSON.parse($(this).text());
+                    const horasFormateadas = convertirHoras(horas);
+                    $(this).text(horasFormateadas);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
