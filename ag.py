@@ -299,7 +299,6 @@ def ejecutar_algoritmo_genetico():
     ag = AlgoritmoGenetico(0.8, 0.5, 10, 100, 500, materias)
     ag.main()
     
-    # Devolver solo el primer arreglo de resultados
     if ag.resultados:
         return jsonify(ag.resultados[0])
     else:
