@@ -3,6 +3,7 @@ import numpy as np
 import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import math
 
 from data import mapa_curricular
 
@@ -45,14 +46,14 @@ class Materia:
 
 class AlgoritmoGenetico:
     def __init__(self, prob_cruza, prob_mutacion, pob_maxima, pob_inicial, generaciones, materias):
-        self.prob_cruza = prob_cruza
+        self.prob_cruza = prob_cruza 
         self.prob_mutacion = prob_mutacion
         self.pob_inicial = pob_inicial
         self.pob_maxima = pob_maxima
         self.materias = materias
         self.generaciones = generaciones
         self.poblacion = []
-        self.maximo_de_materias = 8
+        self.maximo_de_materias = 9
         self.calif_cuatrimestre_meta = None
         self.calif_seriacion_meta = None
         self.calif_holgura_meta = None
@@ -63,70 +64,77 @@ class AlgoritmoGenetico:
             horario = set()
             limite = None
             numero_materias_distintas = self.numero_materias_nombre_distinto()
-            if numero_materias_distintas < self.maximo_de_materias:
-                limite = random.randint((numero_materias_distintas // 2) + 1, numero_materias_distintas)
+            if numero_materias_distintas < self.maximo_de_materias: 
+                limite = random.randint((numero_materias_distintas//2) + 1, numero_materias_distintas) 
             else:
-                limite = random.randint((self.maximo_de_materias // 2) + 1, self.maximo_de_materias)
+                limite = random.randint((self.maximo_de_materias//2) + 1, self.maximo_de_materias)
             conta_0 = 0
-            while conta_0 < limite:
+            while conta_0 < limite: 
                 materia = None
                 indices = []
                 bandera = True
-                while not materia or self.evaluar_materias_mismo_nombre(materia, horario) or self.evaluar_choque_materias(materia, horario):
+                while not materia or self.evaluar_materias_mismo_nombre(materia,horario) or self.evaluar_choque_materias(materia, horario):
                     if len(indices) == len(self.materias):
                         bandera = False
                         break
-                    indice_random = random.randint(0, len(self.materias) - 1)
+                    indice_random = random.randint(0,len(self.materias)-1)
                     while indice_random in indices:
-                        indice_random = random.randint(0, len(self.materias) - 1)
+                        indice_random = random.randint(0,len(self.materias)-1)
                     indices.append(indice_random)
                     materia = self.materias[indice_random]
                 if bandera:
                     horario.add(materia)
                 conta_0 += 1
             self.poblacion.append(horario)
-
-    def evaluar_choque_materias(self, materia, horario):
+        
+    def evaluar_choque_materias(self,materia, horario):
         cont = 0
         for elemento in horario:
             for dia in ['lunes', 'martes', 'miercoles', 'jueves', 'viernes']:
                 horas_dia_materia_horario = set(getattr(elemento, dia))
                 horas_dia_materia = set(getattr(materia, dia))
                 cont += len(horas_dia_materia_horario.intersection(horas_dia_materia))
-        return cont != 0
+        if cont == 0:
+            return False
+        else:
+            return True
 
-    def evaluar_materias_mismo_nombre(self, materia, horario):
+    
+    def evaluar_materias_mismo_nombre(self,materia, horario):
         for elemento in horario:
             if materia.nombre == elemento.nombre:
                 return True
         return False
-
+    
     def numero_materias_nombre_distinto(self):
         nombres_unicos = set()
         for materia in self.materias:
             nombres_unicos.add(materia.nombre)
         return len(nombres_unicos)
-
+    
     def obtener_media_calif_cuatri(self):
         suma = 0
         for materia in self.materias:
             suma += materia.calif_cuatrimestre
-        media = suma / len(self.materias)
-        self.calif_cuatrimestre_meta = media * self.maximo_de_materias
+        media = suma/len(self.materias)
+        self.calif_cuatrimestre_meta = media*self.maximo_de_materias
 
     def obtener_max_calif_seriacion(self):
         mayor_calif_seriacion = self.materias[0].calif_seriacion
         for materia in self.materias:
             if materia.calif_seriacion > mayor_calif_seriacion:
                 mayor_calif_seriacion = materia.calif_seriacion
-        self.calif_seriacion_meta = mayor_calif_seriacion * self.maximo_de_materias
-
+        self.calif_seriacion_meta = mayor_calif_seriacion*self.maximo_de_materias
+    
     def obtener_media_calif_holgura(self):
         suma = 0
+        n = len(self.materias)
         for materia in self.materias:
             suma += materia.calif_holgura
-        media = suma / len(self.materias)
-        self.calif_holgura_meta = media * self.maximo_de_materias
+        media = suma / n
+        suma_diferencias_cuadradas = sum((materia.calif_holgura - media) ** 2 for materia in self.materias)
+        desviacion_estandar = math.sqrt(suma_diferencias_cuadradas / n)
+        self.calif_holgura_meta = media - desviacion_estandar
 
     def emparejar(self):
         probas_cruza = []
@@ -135,10 +143,10 @@ class AlgoritmoGenetico:
             probas_cruza.append(random.random())
         for i in range(len(self.poblacion)):
             if probas_cruza[i] < self.prob_cruza:
-                hijos = self.reproducir(self.poblacion[i], self.poblacion[random.randint(0, len(self.poblacion) - 1)])
+                hijos = self.reproducir(self.poblacion[i],self.poblacion[random.randint(0,len(self.poblacion)-1)])
                 self.poblacion.extend(hijos)
 
-    def reproducir(self, padre, madre):
+    def reproducir(self,padre, madre):
         hijos = None
         hijo_1 = set()
         hijo_2 = set()
@@ -149,42 +157,45 @@ class AlgoritmoGenetico:
         dif = union.difference(interseccion)
         cont = 0
         for materia in dif:
-            if cont % 2 == 0:
-                if not self.evaluar_materias_mismo_nombre(materia, hijo_1) and not self.evaluar_choque_materias(materia, hijo_1):
+            if cont%2 == 0:
+                if not self.evaluar_materias_mismo_nombre(materia, hijo_1) and not self.evaluar_choque_materias(materia,hijo_1) and len(hijo_1) < self.maximo_de_materias:
                     hijo_1.add(materia)
-                elif not self.evaluar_materias_mismo_nombre(materia, hijo_2) and not self.evaluar_choque_materias(materia, hijo_2):
+                elif not self.evaluar_materias_mismo_nombre(materia, hijo_2) and not self.evaluar_choque_materias(materia,hijo_2) and len(hijo_2) < self.maximo_de_materias:
                     hijo_2.add(materia)
             else:
-                if not self.evaluar_materias_mismo_nombre(materia, hijo_2) and not self.evaluar_choque_materias(materia, hijo_2):
+                if not self.evaluar_materias_mismo_nombre(materia, hijo_2) and not self.evaluar_choque_materias(materia,hijo_2) and len(hijo_2) < self.maximo_de_materias:
                     hijo_2.add(materia)
-                elif not self.evaluar_materias_mismo_nombre(materia, hijo_1) and not self.evaluar_choque_materias(materia, hijo_1):
+                elif not self.evaluar_materias_mismo_nombre(materia, hijo_1) and not self.evaluar_choque_materias(materia,hijo_1) and len(hijo_1) < self.maximo_de_materias:
                     hijo_1.add(materia)
-            cont += 1
-        hijos = [hijo_1, hijo_2]
+            cont += 1  
+        hijos = [hijo_1,hijo_2]
         return self.mutar(hijos)
-
+    
     def mutar(self, hijos):
         for hijo in hijos:
             proba_mute = random.random()
-            if proba_mute <= self.prob_mutacion and len(hijo) > 1:
-                hijo.pop()
-            else:
-                materia = None
-                indices = []
-                bandera = True
-                while not materia or self.evaluar_materias_mismo_nombre(materia, hijo) or self.evaluar_choque_materias(materia, hijo):
-                    if len(indices) == len(self.materias):
-                        bandera = False
-                        break
-                    indice_random = random.randint(0, len(self.materias) - 1)
-                    while indice_random in indices:
-                        indice_random = random.randint(0, len(self.materias) - 1)
-                    indices.append(indice_random)
-                    materia = self.materias[indice_random]
-                if bandera:
-                    hijo.add(materia)
-        return hijos
-
+            if proba_mute <= self.prob_mutacion:
+                quitar_agregar = random.random()
+                if quitar_agregar < 0.5 and len(hijo)>1:
+                    hijo.pop()
+                else:
+                    if len(hijo) < self.maximo_de_materias:
+                        materia = None
+                        indices = []
+                        bandera = True
+                        while not materia or self.evaluar_materias_mismo_nombre(materia,hijo) or self.evaluar_choque_materias(materia, hijo):
+                            if len(indices) == len(self.materias):
+                                bandera = False
+                                break
+                            indice_random = random.randint(0,len(self.materias)-1)
+                            while indice_random in indices:
+                                indice_random = random.randint(0,len(self.materias)-1)
+                            indices.append(indice_random)
+                            materia = self.materias[indice_random]
+                        if bandera:
+                            hijo.add(materia)
+        return(hijos)
+    
     def evaluar_poblacion(self):
         aptitudes = []
         ys_calculadas = []
@@ -198,18 +209,19 @@ class AlgoritmoGenetico:
                 cont_calif_holgura += materia.calif_holgura
             yc = [
                 len(individuo),
-                cont_calif_cuatri,
-                cont_calif_seriacion,
+                cont_calif_cuatri, 
+                cont_calif_seriacion, 
                 cont_calif_holgura
             ]
             ys_calculadas.append(np.array(yc))
         yd = np.array([self.maximo_de_materias, self.calif_cuatrimestre_meta, self.calif_seriacion_meta, self.calif_holgura_meta])
-
         for i in range(len(self.poblacion)):
-            error = yd - ys_calculadas[i]
+            yd_aux = yd.tolist()
+            yd_aux[3] = yd_aux[3]*ys_calculadas[i][0]
+            yd_aux = np.array(yd_aux)
+            error = yd_aux - ys_calculadas[i]
             norma = np.linalg.norm(error)
             aptitudes.append((norma, i))
-
         aptitudes.sort(key=lambda x: x[0])
         return aptitudes
 
@@ -224,9 +236,9 @@ class AlgoritmoGenetico:
         for i in range(len(self.poblacion)):
             poblacion_podada.append(self.poblacion[aptitudes[i][1]])
         if len(self.poblacion) > self.pob_maxima:
-            poblacion_podada = poblacion_podada[:self.pob_maxima]
+            poblacion_podada = poblacion_podada[:self.pob_maxima]    
         self.poblacion = poblacion_podada
-
+    
     def main(self):
         self.obtener_media_calif_cuatri()
         self.obtener_max_calif_seriacion()
@@ -296,7 +308,7 @@ def ejecutar_algoritmo_genetico():
     obtener_calif_seriacion(materias)
     obtener_calif_holgura(materias, cuatrimestre_alumno)
     
-    ag = AlgoritmoGenetico(0.8, 0.5, 10, 100, 500, materias)
+    ag = AlgoritmoGenetico(0.8, 0.8, 10, 100, 500, materias)
     ag.main()
     
     if ag.resultados:
