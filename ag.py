@@ -133,8 +133,8 @@ class AlgoritmoGenetico:
             suma += materia.calif_holgura
         media = suma / n
         suma_diferencias_cuadradas = sum((materia.calif_holgura - media) ** 2 for materia in self.materias)
-        desviacion_estandar = math.sqrt(suma_diferencias_cuadradas / n)
-        self.calif_holgura_meta = media - desviacion_estandar
+        desviacion_estandar = math.sqrt(suma_diferencias_cuadradas / (n-1))
+        self.calif_holgura_meta = media - (1/2)*desviacion_estandar
 
     def emparejar(self):
         probas_cruza = []
