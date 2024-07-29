@@ -4,6 +4,8 @@ import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import math
+import matplotlib.pyplot as plt
+import os
 
 from data import mapa_curricular
 
@@ -58,6 +60,7 @@ class AlgoritmoGenetico:
         self.calif_seriacion_meta = None
         self.calif_holgura_meta = None
         self.resultados = []
+        self.normas = []
 
     def crear_pob_inicial(self):
         for i in range(self.pob_inicial):
@@ -223,6 +226,7 @@ class AlgoritmoGenetico:
             norma = np.linalg.norm(error)
             aptitudes.append((norma, i))
         aptitudes.sort(key=lambda x: x[0])
+        self.normas.append[aptitudes[0][0]]
         return aptitudes
 
     def podar(self):
@@ -239,6 +243,23 @@ class AlgoritmoGenetico:
             poblacion_podada = poblacion_podada[:self.pob_maxima]    
         self.poblacion = poblacion_podada
     
+    def graficar_mejores_normas(self):
+        plt.figure(figsize=(10, 5))
+        plt.plot(self.normas, label='Mejor Norma por Generación')
+        plt.xlabel('Generación')
+        plt.ylabel('Norma')
+        plt.title('Evolución de la Mejor Norma por Generación')
+        plt.legend()
+        plt.grid(True)
+
+        # Crear directorio si no existe
+        if not os.path.exists('graficas'):
+            os.makedirs('graficas')
+
+        # Guardar la figura
+        plt.savefig('graficas/mejores_normas.png')
+        plt.close()
+    
     def main(self):
         self.obtener_media_calif_cuatri()
         self.obtener_max_calif_seriacion()
@@ -247,10 +268,12 @@ class AlgoritmoGenetico:
         for i in range(self.generaciones):
             self.emparejar()
             self.podar()
+        self.graficar_mejores_normas()
         self.resultados = [
             [{k: getattr(elemento, k) for k in vars(elemento)} for elemento in individuo]
             for individuo in self.poblacion
         ]
+        
 
 def obtener_calif_cuatrimestre(materias):
     cuatris = set()
@@ -308,7 +331,7 @@ def ejecutar_algoritmo_genetico():
     obtener_calif_seriacion(materias)
     obtener_calif_holgura(materias, cuatrimestre_alumno)
     
-    ag = AlgoritmoGenetico(0.8, 0.8, 10, 100, 500, materias)
+    ag = AlgoritmoGenetico(0.8, 0.8, 3, 5, 500, materias)
     ag.main()
     
     if ag.resultados:
